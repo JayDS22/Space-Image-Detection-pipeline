@@ -8,82 +8,38 @@ This project was developed as part of work related to the **Strategic Space Sens
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                        Input Frame (Grayscale)                         │
-│                      (Sensor image or synthetic)                       │
-└──────────────────────────────┬──────────────────────────────────────────┘
-                               │
-                 ┌─────────────▼──────────────┐
-                 │   Background Estimation     │
-                 │  (Morphological Opening)    │
-                 │  image_processing.cpp       │
-                 └─────────────┬──────────────┘
-                               │
-              ┌────────────────┼────────────────┐
-              ▼                                  ▼
-┌──────────────────────┐             ┌──────────────────────┐
-│  STAR DETECTION PATH │             │ STREAK DETECTION PATH│
-│  star_detector.cpp   │             │ streak_detector.cpp  │
-└──────────┬───────────┘             └──────────┬───────────┘
-           │                                     │
-           ▼                                     ▼
-┌──────────────────────┐             ┌──────────────────────┐
-│ Adaptive Threshold   │             │  Bilateral Filter    │
-│ (mean + k*sigma of   │             │  (Noise reduction    │
-│  noise floor)        │             │   preserving edges)  │
-└──────────┬───────────┘             └──────────┬───────────┘
-           │                                     │
-           ▼                                     ▼
-┌──────────────────────┐             ┌──────────────────────┐
-│ Connected Component  │             │  Canny Edge          │
-│ Labeling + Filtering │             │  Detection           │
-│ (area, eccentricity) │             └──────────┬───────────┘
-└──────────┬───────────┘                        │
-           │                                     ▼
-           ▼                         ┌──────────────────────┐
-┌──────────────────────┐             │  Probabilistic Hough │
-│ Sub-Pixel Centroid   │             │  Line Transform      │
-│ Refinement           │             └──────────┬───────────┘
-│ (Intensity-weighted  │                        │
-│  moments)            │                        ▼
-└──────────┬───────────┘             ┌──────────────────────┐
-           │                         │  Segment Clustering  │
-           │                         │  (Angle + distance   │
-           │                         │   merging)           │
-           │                         └──────────┬───────────┘
-           ▼                                     ▼
-┌──────────────────────┐             ┌──────────────────────┐
-│  Star Detections     │             │  Streak Detections   │
-│  (x, y, area,       │             │  (endpoints, length, │
-│   refined centroid)  │             │   fragment count)    │
-└──────────────────────┘             └──────────────────────┘
+```mermaid
+flowchart TB
+    IN[Input Frame Grayscale<br/>Sensor image or synthetic]
+    BG[Background Estimation<br/>Morphological Opening<br/>image_processing.cpp]
+    IN --> BG
+    BG --> STAR[STAR DETECTION PATH<br/>star_detector.cpp]
+    BG --> STREAK[STREAK DETECTION PATH<br/>streak_detector.cpp]
+    STAR --> AT[Adaptive Threshold<br/>mean + k*sigma of noise floor]
+    AT --> CC[Connected Component Labeling + Filtering<br/>area, eccentricity]
+    CC --> SC[Sub-Pixel Centroid Refinement<br/>Intensity-weighted moments]
+    SC --> SO[Star Detections<br/>x, y, area, refined centroid]
+    STREAK --> BF[Bilateral Filter<br/>Noise reduction preserving edges]
+    BF --> CE[Canny Edge Detection]
+    CE --> PH[Probabilistic Hough Line Transform]
+    PH --> SG[Segment Clustering<br/>Angle + distance merging]
+    SG --> KO[Streak Detections<br/>endpoints, length, fragment count]
 ```
 
 ### Module Dependency Graph
 
-```
-┌──────────────────────────────────────────────────────┐
-│                     main.cpp                         │
-│           (CLI, synthetic data gen, I/O)             │
-└───────┬─────────────────────────────────┬────────────┘
-        │                                 │
-        ▼                                 ▼
-┌───────────────────┐          ┌───────────────────────┐
-│  star_detector    │          │   streak_detector     │
-│  (.hpp / .cpp)    │          │   (.hpp / .cpp)       │
-└────────┬──────────┘          └────────┬──────────────┘
-         │                              │
-         └──────────┬───────────────────┘
-                    ▼
-         ┌──────────────────────┐
-         │  image_processing    │    ◄── shared background estimation
-         │  (.hpp / .cpp)       │        and adaptive thresholding
-         └──────────────────────┘
-                    ▲
-         ┌──────────────────────┐
-         │  profiler.hpp        │    ◄── header-only timing utilities
-         └──────────────────────┘
+```mermaid
+flowchart TD
+    MAIN[main.cpp<br/>CLI, synthetic data gen, I/O]
+    SD[star_detector .hpp/.cpp]
+    STD[streak_detector .hpp/.cpp]
+    IP[image_processing .hpp/.cpp<br/>shared background estimation<br/>and adaptive thresholding]
+    PROF[profiler.hpp<br/>header-only timing utilities]
+    MAIN --> SD
+    MAIN --> STD
+    SD --> IP
+    STD --> IP
+    IP --> PROF
 ```
 
 ### Source File Descriptions
